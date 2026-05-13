@@ -1,4 +1,13 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
+if (!API_BASE_URL) {
+  throw new Error(
+    "VITE_API_BASE_URL is not set. " +
+    "For local dev, add it to apps/web/.env. " +
+    "For Netlify, set it under Site → Environment variables."
+  );
+}
+
+const API_KEY = import.meta.env.VITE_API_KEY || "";
 
 export class ApiError extends Error {
   constructor(message, status, detail) {
@@ -14,6 +23,7 @@ async function request(path, options = {}) {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
       ...(options.headers || {}),
     },
     ...options,

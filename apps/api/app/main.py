@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response, Security
+from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Dict, Any, List
 import hmac
@@ -46,6 +47,17 @@ async def add_security_headers(request: Request, call_next):
 
 snapshot_cache = TTLCache(maxsize=128, ttl=settings.snapshot_cache_ttl_seconds)
 guest_usage_cache = TTLCache(maxsize=10000, ttl=settings.guest_quota_ttl_seconds)
+
+# ── API Key authentication ────────────────────────────────────────────────────
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+def verify_api_key(api_key: str = Security(_api_key_header)) -> None:
+    """Dependency: reject requests whose X-API-Key doesn't match API_KEY env var.
+    If API_KEY is not configured the check is skipped (dev / first-boot grace)."""
+    if not settings.api_key:
+        return  # Not configured — allow through (warn in logs)
+    if not api_key or not hmac.compare_digest(api_key, settings.api_key):
+        raise HTTPException(status_code=401, detail="Invalid or missing API key.")
 
 def _client_ip(request: Request) -> str:
     forwarded_for = request.headers.get("x-forwarded-for", "")
@@ -157,7 +169,7 @@ def _cache_key(tickers: List[str], lookback: int, feed: str) -> str:
     t = ",".join(sorted(set([x.upper() for x in tickers])))
     return f"{feed}:{lookback}:{t}"
 
-@app.post("/api/market/snapshot")
+@app.post("/api/market/snapshot", dependencies=[Security(verify_api_key)])
 def market_snapshot(req: MarketSnapshotRequest) -> Dict[str, Any]:
     alpaca = get_alpaca()
     tickers = [t.upper().strip() for t in req.tickers if t.strip()]
@@ -173,7 +185,7 @@ def market_snapshot(req: MarketSnapshotRequest) -> Dict[str, Any]:
     snapshot_cache[key] = out
     return {"feed": settings.alpaca_data_feed, "snapshots": out, "cached": False}
 
-@app.post("/api/screen", response_model=ScreenResponse)
+@app.post("/api/screen", response_model=ScreenResponse, dependencies=[Security(verify_api_key)])
 def screen(req: ScreenRequest, request: Request, response: Response):
     _enforce_guest_quota(request, response)
     alpaca = get_alpaca()
@@ -236,12 +248,12 @@ def screen(req: ScreenRequest, request: Request, response: Response):
     quota = _record_guest_screen(request, response)
     return ScreenResponse(settings={**req.model_dump(), "guestQuota": quota}, candidates=out, notes=notes)
 
-@app.post("/api/explain", response_model=ExplainResponse)
+@app.post("/api/explain", response_model=ExplainResponse, dependencies=[Security(verify_api_key)])
 def explain_screen(req: ExplainRequest):
     payload = explain(req.settings, req.candidates)
     return ExplainResponse(**payload)
 
-@app.post("/api/trading/paper/order")
+@app.post("/api/trading/paper/order", dependencies=[Security(verify_api_key)])
 def paper_order(req: PaperOrderRequest):
     if not settings.paper_trading_enabled:
         raise HTTPException(

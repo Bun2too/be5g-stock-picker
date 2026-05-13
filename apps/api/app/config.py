@@ -9,6 +9,10 @@ ENV_FILE = API_DIR / ".env"
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=ENV_FILE, extra="ignore")
 
+    # Internal API key — callers must send this in X-API-Key header.
+    # Generate with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+    api_key: Optional[str] = None
+
     alpaca_api_key: Optional[str] = None
     alpaca_api_secret: Optional[str] = None
     alpaca_base_url: str = "https://paper-api.alpaca.markets/v2"
@@ -28,7 +32,7 @@ class Settings(BaseSettings):
     guest_screen_limit: int = 3
     guest_quota_ttl_seconds: int = 60 * 60 * 24
     guest_session_cookie_name: str = "stock_picker_guest"
-    guest_session_cookie_secure: bool = False
+    guest_session_cookie_secure: bool = True
     guest_session_cookie_samesite: str = "lax"
     whitelisted_ips: str = ""
     bypass_cookie_name: str = "stock_picker_access"
