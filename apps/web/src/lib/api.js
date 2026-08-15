@@ -19,14 +19,16 @@ export class ApiError extends Error {
 }
 
 async function request(path, options = {}) {
+  const { accessToken, ...fetchOptions } = options;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
       ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
-      ...(options.headers || {}),
+      ...(fetchOptions.headers || {}),
     },
-    ...options,
+    ...fetchOptions,
   });
 
   if (!response.ok) {
@@ -43,16 +45,42 @@ export async function getHealth() {
   return request("/healthz");
 }
 
-export async function runScreen(settings) {
+export async function getPlans() {
+  return request("/api/plans");
+}
+
+export async function searchSymbols({ query = "", market = "", limit = 50 } = {}, accessToken) {
+  const params = new URLSearchParams();
+  if (query) params.set("q", query);
+  if (market) params.set("market", market);
+  params.set("limit", String(limit));
+  return request(`/api/symbols?${params.toString()}`, { accessToken });
+}
+
+export async function getPortfolio(accessToken) {
+  return request("/api/portfolio", { accessToken });
+}
+
+export async function savePortfolio(symbols, accessToken) {
+  return request("/api/portfolio", {
+    method: "PUT",
+    accessToken,
+    body: JSON.stringify({ symbols }),
+  });
+}
+
+export async function runScreen(settings, accessToken) {
   return request("/api/screen", {
     method: "POST",
+    accessToken,
     body: JSON.stringify(settings),
   });
 }
 
-export async function explainScreen(settings, candidates) {
+export async function explainScreen(settings, candidates, accessToken) {
   return request("/api/explain", {
     method: "POST",
+    accessToken,
     body: JSON.stringify({ settings, candidates }),
   });
 }

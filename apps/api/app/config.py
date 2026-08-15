@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     auth0_issuer: Optional[str] = None
     auth0_algorithms: str = "RS256"
 
+    # Stripe subscription plumbing. Checkout URLs can be temporary Stripe Payment
+    # Links for launch, then replaced by backend-created Checkout Sessions.
+    stripe_secret_key: Optional[str] = None
+    stripe_webhook_secret: Optional[str] = None
+    stripe_level1_checkout_url: Optional[str] = None
+    stripe_level2_checkout_url: Optional[str] = None
+    stripe_billing_portal_url: Optional[str] = None
+
     # Public launch guest quota.
     guest_screen_limit: int = 3
     guest_quota_ttl_seconds: int = 60 * 60 * 24
@@ -50,6 +58,14 @@ class Settings(BaseSettings):
     @property
     def alpaca_configured(self) -> bool:
         return bool(self.alpaca_api_key and self.alpaca_api_secret)
+
+    @property
+    def auth0_configured(self) -> bool:
+        return bool(self.auth0_domain and self.auth0_audience)
+
+    @property
+    def stripe_configured(self) -> bool:
+        return bool(self.stripe_secret_key and self.stripe_webhook_secret)
 
     @property
     def missing_alpaca_fields(self) -> List[str]:

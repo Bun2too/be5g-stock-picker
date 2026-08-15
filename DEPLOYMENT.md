@@ -142,6 +142,39 @@ Before enabling real-money trading or "trainable AI" workflows, add:
 - broker action confirmations,
 - clear separation between screening insights and trade execution.
 
+## CI/CD Pipeline (GitHub Actions)
+
+This repository includes a production-ready GitHub Actions workflow in [`.github/workflows/ci-cd.yml`](.github/workflows/ci-cd.yml).
+
+### Pipeline Stages
+
+1. **Test**:
+   - `apps/api`: Runs `pytest` in Python 3.12 with simulated credentials.
+   - `apps/web`: Runs `vitest` in Node 20.
+2. **Build**:
+   - `apps/web`: Executes `npm run build` with injected production variables and saves `dist/` as a pipeline artifact.
+3. **Deploy** (Triggered automatically on push to `main`):
+   - **Frontend → Netlify**: Uses Netlify CLI to deploy `dist/` directly to your production site.
+   - **Backend → Railway**: Uses Railway CLI (`railway up`) to deploy the `apps/api` service.
+
+### Required GitHub Repository Secrets
+
+In your GitHub repository, navigate to **Settings → Secrets and variables → Actions → New repository secret** and add:
+
+| Secret Name | Description | Example / Source |
+|---|---|---|
+| `NETLIFY_AUTH_TOKEN` | Netlify Personal Access Token | Netlify User Settings → Personal access tokens |
+| `NETLIFY_SITE_ID` | Netlify Site API ID | Netlify Site → Site configuration → General |
+| `RAILWAY_TOKEN` | Railway API / Account Token | Railway → Account Settings → Tokens |
+| `RAILWAY_SERVICE_ID` | Railway Service ID for `apps/api` | Railway project → Service Settings → Service ID |
+| `VITE_API_BASE_URL` | Live Backend API URL | `https://your-backend.railway.app` |
+| `VITE_API_KEY` | Backend internal access key | Same value as `API_KEY` in Railway |
+| `VITE_AUTH0_DOMAIN` *(Optional)* | Auth0 Domain | `dev-bun2too.us.auth0.com` |
+| `VITE_AUTH0_CLIENT_ID` *(Optional)* | Auth0 Client ID | Your Auth0 SPA Client ID |
+| `VITE_AUTH0_AUDIENCE` *(Optional)* | Auth0 Audience | `https://api.be5g.com` |
+
+---
+
 ## Deployment setup
 
 ### Frontend on Netlify

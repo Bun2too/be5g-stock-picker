@@ -4,6 +4,13 @@ from app.config import settings
 from app.main import app, guest_usage_cache
 
 
+def auth_headers(extra=None):
+    headers = dict(extra or {})
+    if settings.api_key:
+        headers["X-API-Key"] = settings.api_key
+    return headers
+
+
 def test_healthz_returns_status_payload():
     client = TestClient(app)
 
@@ -27,7 +34,7 @@ def test_screen_returns_quota_message_when_guest_limit_is_reached():
 
     response = client.post(
         "/api/screen",
-        headers={"x-forwarded-for": "1.2.3.4"},
+        headers=auth_headers({"x-forwarded-for": "1.2.3.4"}),
         json={
             "horizon": "1y",
             "risk": "medium",
@@ -43,3 +50,26 @@ def test_screen_returns_quota_message_when_guest_limit_is_reached():
     payload = response.json()
     assert "subscription" in payload["detail"]["message"]
     assert payload["detail"]["quota"]["remaining"] == 0
+
+
+def test_symbols_and_portfolio_endpoints_support_saved_mixed_selection():
+    client = TestClient(app)
+
+    symbols = client.get("/api/symbols?market=TW&q=2330&limit=5", headers=auth_headers())
+    assert symbols.status_code == 200
+    payload = symbols.json()
+    assert payload["meta"]["counts"]["US"] >= 1000
+    assert payload["meta"]["counts"]["TW"] >= 1500
+    assert any(item["providerSymbol"] == "2330.TW" for item in payload["symbols"])
+
+    saved = client.put(
+        "/api/portfolio",
+        headers=auth_headers({"x-forwarded-for": "5.6.7.8"}),
+        json={"symbols": ["NVDA", "2330.TW", "NVDA"]},
+    )
+    assert saved.status_code == 200
+    assert saved.json()["symbols"] == ["NVDA", "2330.TW"]
+
+    loaded = client.get("/api/portfolio", headers=auth_headers({"x-forwarded-for": "5.6.7.8"}))
+    assert loaded.status_code == 200
+    assert loaded.json()["symbols"] == ["NVDA", "2330.TW"]

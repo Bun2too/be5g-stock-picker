@@ -74,7 +74,6 @@ def get_universe(name: str):
     if name == "sp500_like":
         return list(dict.fromkeys(SP500_LIKE))
     if name == "all":
-        # Return the full expanded universe (real + placeholder tickers)
-        return list(dict.fromkeys(MEGA_CAPS + ALL_TICKERS))
+        return list(dict.fromkeys(MEGA_CAPS + NASDAQ100_LIKE + SP500_LIKE))
     # Default: mega caps list
     return list(dict.fromkeys(MEGA_CAPS))
