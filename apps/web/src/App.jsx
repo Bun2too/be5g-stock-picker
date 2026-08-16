@@ -23,6 +23,8 @@ const DEFAULT_SETTINGS = {
   diversification: "balanced",
 };
 
+const TW_STOCK_ENABLED = import.meta.env.VITE_TW_STOCK_ENABLED === "true";
+
 const STRIPE_LEVEL1_URL =
   import.meta.env.VITE_STRIPE_LEVEL1_CHECKOUT_URL ||
   "https://buy.stripe.com/dRm6oH2zxduG2Yc8Drds400";
@@ -36,6 +38,11 @@ function formatMoney(value) {
   if (value >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
   if (value >= 1e3) return `$${(value / 1e3).toFixed(1)}K`;
   return `$${value.toFixed(0)}`;
+}
+
+function filterSymbolsForEnabledMarkets(symbols) {
+  if (TW_STOCK_ENABLED) return symbols;
+  return symbols.filter((symbol) => !symbol.toUpperCase().endsWith(".TW") && !symbol.toUpperCase().endsWith(".TWO"));
 }
 
 // ── SVG Icons ─────────────────────────────────────────────────────────────────
@@ -251,7 +258,7 @@ function StockPickerApp({ auth }) {
   );
   const [results, setResults] = useState([]);
   const [symbolQuery, setSymbolQuery] = useState("");
-  const [symbolMarket, setSymbolMarket] = useState("US,TW");
+  const [symbolMarket, setSymbolMarket] = useState(TW_STOCK_ENABLED ? "US,TW" : "US");
   const [symbolResults, setSymbolResults] = useState([]);
   const [symbolMeta, setSymbolMeta] = useState(null);
   const [portfolioSaving, setPortfolioSaving] = useState(false);
@@ -274,7 +281,7 @@ function StockPickerApp({ auth }) {
       .then((payload) => {
         if (payload.billingPortalUrl) setBillingPortalUrl(payload.billingPortalUrl);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Restore portfolio from local storage then API
@@ -284,7 +291,7 @@ function StockPickerApp({ auth }) {
       try {
         const symbols = JSON.parse(stored);
         if (Array.isArray(symbols))
-          setSettings((current) => ({ ...current, selectedSymbols: symbols }));
+          setSettings((current) => ({ ...current, selectedSymbols: filterSymbolsForEnabledMarkets(symbols) }));
       } catch {
         window.localStorage.removeItem("stockPickerPortfolio");
       }
@@ -292,15 +299,16 @@ function StockPickerApp({ auth }) {
 
     getPortfolio()
       .then((payload) => {
-        if (payload.symbols?.length) {
+        const symbols = filterSymbolsForEnabledMarkets(payload.symbols || []);
+        if (symbols.length) {
           window.localStorage.setItem(
             "stockPickerPortfolio",
-            JSON.stringify(payload.symbols)
+            JSON.stringify(symbols)
           );
-          setSettings((current) => ({ ...current, selectedSymbols: payload.symbols }));
+          setSettings((current) => ({ ...current, selectedSymbols: symbols }));
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   // Debounced symbol search
@@ -323,6 +331,28 @@ function StockPickerApp({ auth }) {
 
   function updateSetting(key, value) {
     setSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateUniverse(value) {
+    setSettings((current) => ({ ...current, universe: value }));
+    if (value === "tw_popular") {
+      setSymbolMarket("TW");
+    } else if (value === "us_most_traded" || value === "mega_caps" || value === "nasdaq100_like" || value === "sp500_like") {
+      setSymbolMarket("US");
+    }
+  }
+
+  function updateSymbolMarket(value) {
+    setSymbolMarket(value);
+    if (value === "TW") {
+      setSettings((current) => ({ ...current, universe: "tw_popular" }));
+    } else if (value === "US") {
+      setSettings((current) => (
+        current.universe === "tw_popular"
+          ? { ...current, universe: "us_most_traded" }
+          : current
+      ));
+    }
   }
 
   function selectedSet() {
@@ -406,6 +436,8 @@ function StockPickerApp({ auth }) {
   const showUpgradeBanner =
     quota && !quota.exempt && quota.remaining !== null && quota.remaining <= 1;
 
+  const heroCopy = TW_STOCK_ENABLED ? t.hero.copy : t.hero.copyUsOnly;
+
   const strategyPlans = [
     {
       id: "free",
@@ -434,7 +466,9 @@ function StockPickerApp({ auth }) {
       price: t.tiers.items.level_2.price,
       period: t.tiers.items.level_2.period,
       highlight: false,
-      features: t.tiers.items.level_2.features,
+      features: TW_STOCK_ENABLED
+        ? t.tiers.items.level_2.features
+        : t.tiers.items.level_2.featuresUsOnly,
       checkoutUrl: STRIPE_LEVEL2_URL,
     },
   ];
@@ -482,7 +516,7 @@ function StockPickerApp({ auth }) {
             <p className="eyebrow">{t.hero.eyebrow}</p>
             <h1>{t.hero.title}</h1>
           </div>
-          <p className="hero-copy">{t.hero.copy}</p>
+          <p className="hero-copy">{heroCopy}</p>
           <div className="hero-cta-row">
             <button
               id="run-screen-btn"
@@ -648,13 +682,15 @@ function StockPickerApp({ auth }) {
             <select
               id="setting-universe"
               value={settings.universe}
-              onChange={(e) => updateSetting("universe", e.target.value)}
+              onChange={(e) => updateUniverse(e.target.value)}
             >
               <option value="mega_caps">{t.controls.universes.mega_caps}</option>
               <option value="nasdaq100_like">{t.controls.universes.nasdaq100_like}</option>
               <option value="sp500_like">{t.controls.universes.sp500_like}</option>
               <option value="us_most_traded">{t.controls.universes.us_most_traded}</option>
-              <option value="tw_popular">{t.controls.universes.tw_popular}</option>
+              {TW_STOCK_ENABLED && (
+                <option value="tw_popular">{t.controls.universes.tw_popular}</option>
+              )}
               <option value="mixed_portfolio">{t.controls.universes.mixed_portfolio}</option>
             </select>
           </label>
@@ -670,24 +706,31 @@ function StockPickerApp({ auth }) {
               <input
                 type="search"
                 id="symbol-search"
-                placeholder={t.controls.searchPlaceholder}
+                placeholder={TW_STOCK_ENABLED ? t.controls.searchPlaceholder : t.controls.searchPlaceholderUsOnly}
                 value={symbolQuery}
                 onChange={(e) => setSymbolQuery(e.target.value)}
               />
               <select
                 id="symbol-market"
+                aria-label="Market"
                 value={symbolMarket}
-                onChange={(e) => setSymbolMarket(e.target.value)}
+                onChange={(e) => updateSymbolMarket(e.target.value)}
               >
-                <option value="US,TW">{t.controls.marketOptions.all}</option>
+                {TW_STOCK_ENABLED && (
+                  <option value="US,TW">{t.controls.marketOptions.all}</option>
+                )}
                 <option value="US">{t.controls.marketOptions.us}</option>
-                <option value="TW">{t.controls.marketOptions.tw}</option>
+                {TW_STOCK_ENABLED && (
+                  <option value="TW">{t.controls.marketOptions.tw}</option>
+                )}
               </select>
             </div>
 
             {symbolMeta && (
               <p className="catalog-meta">
-                {t.controls.catalogMeta(symbolMeta.counts?.US || 0, symbolMeta.counts?.TW || 0)}
+                {TW_STOCK_ENABLED
+                  ? t.controls.catalogMeta(symbolMeta.counts?.US || 0, symbolMeta.counts?.TW || 0)
+                  : t.controls.catalogMetaUsOnly(symbolMeta.counts?.US || 0)}
               </p>
             )}
 

@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     alpaca_base_url: str = "https://paper-api.alpaca.markets/v2"
     alpaca_paper: bool = True
     paper_trading_enabled: bool = False
+    tw_stock_enabled: bool = False
+    symbol_store_backend: str = "json"
+    aws_region: str = "us-east-1"
+    aws_symbols_table: Optional[str] = None
+    aws_portfolios_table: Optional[str] = None
 
     # Market data feed: "iex" (free/basic) or "sip" (full market; usually subscription/entitlement)
     alpaca_data_feed: str = "iex"

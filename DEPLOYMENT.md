@@ -7,8 +7,9 @@ For this project's current shape, the best balance of cheap, scalable, and low-m
 - Frontend: `Netlify`
 - Backend API: `Railway`
 - Secrets and broker/data credentials: platform environment variables
-- Database later: `Neon` (Postgres) or `Supabase Postgres`
-- Background jobs later: `Railway`, `GitHub Actions`, or a future worker service
+- Symbol/portfolio persistence and scheduled market jobs: optional AWS sub-project in [`infra/aws`](infra/aws)
+- Database later for relational product data: `Neon` (Postgres) or `Supabase Postgres`
+- Background jobs later for app-specific workflows: `Railway`, `GitHub Actions`, or a future worker service
 
 This split is usually better than forcing everything into one host:
 
@@ -220,6 +221,16 @@ Environment variables:
 - `WHITELISTED_IPS=`
 - `BYPASS_COOKIE_NAME=stock_picker_access`
 - `BYPASS_COOKIE_VALUE=`
+- `SYMBOL_STORE_BACKEND=json`
+
+Optional AWS DynamoDB persistence from [`infra/aws`](infra/aws):
+
+- `SYMBOL_STORE_BACKEND=dynamodb`
+- `AWS_REGION=us-east-1`
+- `AWS_SYMBOLS_TABLE=<terraform output symbols_table_name>`
+- `AWS_PORTFOLIOS_TABLE=<terraform output portfolios_table_name>`
+- `AWS_ACCESS_KEY_ID=<Railway API IAM access key>`
+- `AWS_SECRET_ACCESS_KEY=<Railway API IAM secret key>`
 
 Future Auth0 variables:
 

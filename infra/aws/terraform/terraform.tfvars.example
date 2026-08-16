@@ -1,0 +1,11 @@
+aws_region  = "us-east-1"
+environment = "prod"
+
+# Optional: enables the GitHub OIDC role output.
+github_owner = "your-github-org-or-user"
+github_repo  = "stock-picker"
+
+# Store a broad selection catalog, but keep market refresh smaller while validating
+# costs and data-provider rate limits.
+max_symbols_catalog     = 6000
+max_symbols_per_refresh = 300

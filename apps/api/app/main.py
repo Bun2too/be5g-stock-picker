@@ -158,11 +158,24 @@ def healthz(request: Request, response: Response):
         "feed": settings.alpaca_data_feed,
         "alpacaBaseUrl": settings.alpaca_base_url,
         "paperTradingEnabled": settings.paper_trading_enabled,
+        "twStockEnabled": settings.tw_stock_enabled,
         "guestQuota": _quota_status(request, response),
     }
 
 @app.get("/api/plans")
 def plans():
+    level2_universes = ["mega_caps", "nasdaq100_like", "sp500_like", "us_most_traded", "mixed_portfolio"]
+    level2_features = [
+        "500 screens per day",
+        "All US universes plus advanced analytics",
+        "Advanced correlation & factor analytics",
+        "Unlimited portfolio exports",
+        "Custom alert workflows & priority support",
+    ]
+    if settings.tw_stock_enabled:
+        level2_universes.insert(4, "tw_popular")
+        level2_features[1] = "Full US + Taiwan market catalog"
+
     return {
         "plans": [
             {
@@ -212,16 +225,10 @@ def plans():
                 "highlight": False,
                 "limits": {
                     "screensPerDay": 500,
-                    "universes": ["mega_caps", "nasdaq100_like", "sp500_like", "us_most_traded", "tw_popular", "mixed_portfolio"],
+                    "universes": level2_universes,
                     "savedScreens": 100,
                 },
-                "features": [
-                    "500 screens per day",
-                    "Full US + Taiwan market catalog",
-                    "Advanced correlation & factor analytics",
-                    "Unlimited portfolio exports",
-                    "Custom alert workflows & priority support",
-                ],
+                "features": level2_features,
                 "checkoutUrl": settings.stripe_level2_checkout_url or "https://buy.stripe.com/bJe9AT1vt62ebuI8Drds401",
             },
         ],
@@ -231,6 +238,8 @@ def plans():
 @app.get("/api/symbols", response_model=SymbolSearchResponse, dependencies=[Security(verify_api_key)])
 def symbols(q: str = "", market: str = "", limit: int = 50):
     markets = [part.strip().upper() for part in market.split(",") if part.strip()]
+    if not settings.tw_stock_enabled:
+        markets = [item for item in markets if item != "TW"] or ["US"]
     return SymbolSearchResponse(
         symbols=search_symbols(query=q, markets=markets, limit=limit),
         meta=catalog_meta(),
@@ -243,6 +252,8 @@ def get_saved_portfolio(request: Request, response: Response):
 
 @app.put("/api/portfolio", response_model=PortfolioResponse, dependencies=[Security(verify_api_key)])
 def put_saved_portfolio(req: PortfolioRequest, request: Request, response: Response):
+    if not settings.tw_stock_enabled and _contains_tw_symbol(req.symbols):
+        raise HTTPException(status_code=400, detail="Taiwan stock symbols are currently disabled. Enable TW_STOCK_ENABLED only after a Taiwan market data adapter is configured.")
     owner_key = _quota_key(request, response)
     return PortfolioResponse(**save_portfolio(owner_key, req.symbols))
 
@@ -257,6 +268,9 @@ def get_alpaca() -> AlpacaAdapter:
 def _cache_key(tickers: List[str], lookback: int, feed: str) -> str:
     t = ",".join(sorted(set([x.upper() for x in tickers])))
     return f"{feed}:{lookback}:{t}"
+
+def _contains_tw_symbol(symbols: List[str]) -> bool:
+    return any(symbol.strip().upper().endswith((".TW", ".TWO")) for symbol in symbols)
 
 @app.post("/api/market/snapshot", dependencies=[Security(verify_api_key)])
 def market_snapshot(req: MarketSnapshotRequest) -> Dict[str, Any]:
@@ -277,6 +291,11 @@ def market_snapshot(req: MarketSnapshotRequest) -> Dict[str, Any]:
 @app.post("/api/screen", response_model=ScreenResponse, dependencies=[Security(verify_api_key)])
 def screen(req: ScreenRequest, request: Request, response: Response):
     _enforce_guest_quota(request, response)
+    if not settings.tw_stock_enabled:
+        if req.universe == "tw_popular":
+            raise HTTPException(status_code=400, detail="Taiwan stock screening is currently disabled. Enable TW_STOCK_ENABLED only after a Taiwan market data adapter is configured.")
+        if _contains_tw_symbol(req.selectedSymbols):
+            raise HTTPException(status_code=400, detail="Taiwan stock symbols are currently disabled. Enable TW_STOCK_ENABLED only after a Taiwan market data adapter is configured.")
     alpaca = get_alpaca()
     symbol_meta = symbols_for_screen(req.universe, req.selectedSymbols)
     if symbol_meta:

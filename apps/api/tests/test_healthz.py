@@ -23,6 +23,7 @@ def test_healthz_returns_status_payload():
     assert "mode" in payload
     assert "feed" in payload
     assert payload["guestQuota"]["limit"] == settings.guest_screen_limit
+    assert payload["twStockEnabled"] is False
 
 
 def test_screen_returns_quota_message_when_guest_limit_is_reached():
@@ -52,24 +53,55 @@ def test_screen_returns_quota_message_when_guest_limit_is_reached():
     assert payload["detail"]["quota"]["remaining"] == 0
 
 
-def test_symbols_and_portfolio_endpoints_support_saved_mixed_selection():
+def test_symbols_and_portfolio_endpoints_disable_tw_by_default():
     client = TestClient(app)
 
-    symbols = client.get("/api/symbols?market=TW&q=2330&limit=5", headers=auth_headers())
+    symbols = client.get("/api/symbols?market=TW&limit=5", headers=auth_headers())
     assert symbols.status_code == 200
     payload = symbols.json()
     assert payload["meta"]["counts"]["US"] >= 1000
     assert payload["meta"]["counts"]["TW"] >= 1500
-    assert any(item["providerSymbol"] == "2330.TW" for item in payload["symbols"])
+    assert payload["symbols"]
+    assert all(item["market"] == "US" for item in payload["symbols"])
 
     saved = client.put(
         "/api/portfolio",
         headers=auth_headers({"x-forwarded-for": "5.6.7.8"}),
-        json={"symbols": ["NVDA", "2330.TW", "NVDA"]},
+        json={"symbols": ["NVDA", "2330.TW"]},
+    )
+    assert saved.status_code == 400
+    assert "Taiwan stock symbols are currently disabled" in saved.json()["detail"]
+
+    saved = client.put(
+        "/api/portfolio",
+        headers=auth_headers({"x-forwarded-for": "5.6.7.8"}),
+        json={"symbols": ["NVDA", "NVDA"]},
     )
     assert saved.status_code == 200
-    assert saved.json()["symbols"] == ["NVDA", "2330.TW"]
+    assert saved.json()["symbols"] == ["NVDA"]
 
     loaded = client.get("/api/portfolio", headers=auth_headers({"x-forwarded-for": "5.6.7.8"}))
     assert loaded.status_code == 200
-    assert loaded.json()["symbols"] == ["NVDA", "2330.TW"]
+    assert loaded.json()["symbols"] == ["NVDA"]
+
+
+def test_tw_screening_is_rejected_while_feature_flag_is_disabled():
+    client = TestClient(app)
+    guest_usage_cache.clear()
+
+    response = client.post(
+        "/api/screen",
+        headers=auth_headers(),
+        json={
+            "horizon": "1y",
+            "risk": "medium",
+            "strategy": "momentum",
+            "universe": "tw_popular",
+            "plannedVolumeUsd": 5000,
+            "portfolioSize": 8,
+            "diversification": "balanced",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "Taiwan stock screening is currently disabled" in response.json()["detail"]
