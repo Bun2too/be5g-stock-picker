@@ -45,6 +45,7 @@ jobs:
 
       - name: Run Pytest
         env:
+          PYTHONPATH: ${{ github.workspace }}/apps/api
           ALPACA_API_KEY: "test-key"
           ALPACA_API_SECRET: "test-secret"
           ALPACA_BASE_URL: "https://paper-api.alpaca.markets/v2"
