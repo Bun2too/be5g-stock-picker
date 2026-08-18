@@ -1,0 +1,199 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# be5g Stock Picker — Azure DevOps CI/CD Pipeline
+#
+# Stages:
+#   1. test   → Python pytest + Vitest
+#   2. build  → Vite production build (injects env vars)
+#   3. deploy → Frontend to Netlify, Backend to Railway
+#
+# Variable group required in Azure DevOps Library:
+#   Group name: stock-picker-secrets
+#   Variables:
+#     NETLIFY_AUTH_TOKEN         — Netlify personal access token
+#     NETLIFY_SITE_ID            — Target Netlify site ID
+#     RAILWAY_TOKEN              — Railway API token
+#     RAILWAY_SERVICE_ID         — Railway service ID for the API
+#     VITE_API_BASE_URL          — Production API URL (e.g. https://api.be5g.com)
+#     VITE_API_KEY               — X-API-Key value matching Railway env var API_KEY
+#     VITE_AUTH0_DOMAIN          — Auth0 domain (optional — enables auth in prod build)
+#     VITE_AUTH0_CLIENT_ID       — Auth0 client ID
+#     VITE_AUTH0_AUDIENCE        — Auth0 audience (e.g. https://api.be5g.com)
+# ─────────────────────────────────────────────────────────────────────────────
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - apps/**
+      - azure-pipelines.yml
+
+pr:
+  branches:
+    include:
+      - main
+
+variables:
+  pythonVersion: "3.12"
+  nodeVersion: "20.x"
+
+# ── Stage 1: Test ─────────────────────────────────────────────────────────────
+stages:
+  - stage: Test
+    displayName: "🧪 Test"
+    jobs:
+      - job: BackendTests
+        displayName: "Python / FastAPI tests"
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: UsePythonVersion@0
+            inputs:
+              versionSpec: $(pythonVersion)
+            displayName: "Set up Python $(pythonVersion)"
+
+          - script: |
+              python -m venv .venv
+              source .venv/bin/activate
+              pip install --upgrade pip
+              pip install -r requirements.txt
+            workingDirectory: apps/api
+            displayName: "Install Python dependencies"
+
+          - script: |
+              source .venv/bin/activate
+              pytest --tb=short -q
+            workingDirectory: apps/api
+            displayName: "Run pytest"
+            env:
+              # Stub Alpaca so tests don't need real credentials
+              ALPACA_API_KEY: "test-key"
+              ALPACA_API_SECRET: "test-secret"
+              ALPACA_BASE_URL: "https://paper-api.alpaca.markets/v2"
+              ALPACA_PAPER: "true"
+              PAPER_TRADING_ENABLED: "false"
+              ALPACA_DATA_FEED: "iex"
+              ALLOWED_ORIGINS: "http://localhost:5173"
+              GUEST_SCREEN_LIMIT: "3"
+              GUEST_QUOTA_TTL_SECONDS: "86400"
+              GUEST_SESSION_COOKIE_NAME: "stock_picker_guest"
+              GUEST_SESSION_COOKIE_SECURE: "false"
+              GUEST_SESSION_COOKIE_SAMESITE: "lax"
+
+      - job: FrontendTests
+        displayName: "Node / Vitest tests"
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+            displayName: "Set up Node.js $(nodeVersion)"
+
+          - script: npm ci
+            workingDirectory: apps/web
+            displayName: "Install npm dependencies"
+
+          - script: npm test -- --run
+            workingDirectory: apps/web
+            displayName: "Run Vitest"
+            env:
+              VITE_API_BASE_URL: "http://localhost:8000"
+              VITE_API_KEY: "test-key"
+
+  # ── Stage 2: Build ───────────────────────────────────────────────────────────
+  - stage: Build
+    displayName: "🏗️  Build"
+    dependsOn: Test
+    condition: succeeded()
+    variables:
+      - group: stock-picker-secrets
+    jobs:
+      - job: BuildFrontend
+        displayName: "Vite production build"
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+            displayName: "Set up Node.js $(nodeVersion)"
+
+          - script: npm ci
+            workingDirectory: apps/web
+            displayName: "Install npm dependencies"
+
+          - script: npm run build
+            workingDirectory: apps/web
+            displayName: "Build Vite app"
+            env:
+              VITE_API_BASE_URL: $(VITE_API_BASE_URL)
+              VITE_API_KEY: $(VITE_API_KEY)
+              VITE_AUTH0_DOMAIN: $(VITE_AUTH0_DOMAIN)
+              VITE_AUTH0_CLIENT_ID: $(VITE_AUTH0_CLIENT_ID)
+              VITE_AUTH0_AUDIENCE: $(VITE_AUTH0_AUDIENCE)
+
+          - task: PublishBuildArtifacts@1
+            inputs:
+              pathToPublish: "apps/web/dist"
+              artifactName: "frontend-dist"
+            displayName: "Publish dist/ artifact"
+
+  # ── Stage 3: Deploy ──────────────────────────────────────────────────────────
+  - stage: Deploy
+    displayName: "🚀 Deploy"
+    dependsOn: Build
+    condition: and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    variables:
+      - group: stock-picker-secrets
+    jobs:
+      # 3a — Frontend → Netlify
+      - job: DeployFrontend
+        displayName: "Deploy frontend → Netlify"
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(nodeVersion)
+            displayName: "Set up Node.js $(nodeVersion)"
+
+          - task: DownloadBuildArtifacts@1
+            inputs:
+              buildType: "current"
+              artifactName: "frontend-dist"
+              downloadPath: "$(System.ArtifactsDirectory)"
+            displayName: "Download dist/ artifact"
+
+          - script: npm install -g netlify-cli
+            displayName: "Install Netlify CLI"
+
+          - script: |
+              netlify deploy \
+                --dir "$(System.ArtifactsDirectory)/frontend-dist" \
+                --site "$NETLIFY_SITE_ID" \
+                --auth "$NETLIFY_AUTH_TOKEN" \
+                --prod \
+                --message "Deploy from Azure DevOps build $(Build.BuildId)"
+            displayName: "Deploy to Netlify (production)"
+            env:
+              NETLIFY_AUTH_TOKEN: $(NETLIFY_AUTH_TOKEN)
+              NETLIFY_SITE_ID: $(NETLIFY_SITE_ID)
+
+      # 3b — Backend → Railway
+      - job: DeployBackend
+        displayName: "Deploy backend → Railway"
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - script: |
+              npm install -g @railway/cli
+              railway up \
+                --service "$RAILWAY_SERVICE_ID" \
+                --detach
+            workingDirectory: apps/api
+            displayName: "Deploy to Railway"
+            env:
+              RAILWAY_TOKEN: $(RAILWAY_TOKEN)
+              RAILWAY_SERVICE_ID: $(RAILWAY_SERVICE_ID)

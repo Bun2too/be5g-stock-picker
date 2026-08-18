@@ -4,7 +4,8 @@ This app should treat Auth0 as the identity provider, the FastAPI backend as the
 
 ## Target URLs
 
-- Public app: `https://be5g.com/stocks` or `https://stocks.be5g.com`
+- Current test app: `https://delightful-croquembouche-593575.netlify.app/`
+- Future public app: `https://be5g.com/stocks` or `https://stocks.be5g.com`
 - API: `https://api.be5g.com`
 - Local web: `http://localhost:5173`
 - Local API: `http://localhost:8000`
@@ -79,14 +80,37 @@ Paper trading should require authenticated users, explicit user consent, an audi
 
 ## Implementation Sequence
 
-1. Add Auth0 SPA SDK to `apps/web` and protect the React app.
-2. Add JWT validation middleware/dependencies to `apps/api`.
-3. Add Postgres and the user/org/membership/subscription tables.
-4. Sync Auth0 signup/login users into the local `users` table.
-5. Add role checks and subscription entitlement checks to backend endpoints.
-6. Add Stripe Checkout and webhooks to update local subscription state.
-7. Add an account/billing page and group admin page.
-8. Add audit logs before exposing paper order placement to real users.
+1. Add Auth0 SPA SDK to `apps/web` and protect the React app. Status: started.
+2. Show public pricing and upgrade CTAs from `/api/plans`. Status: started.
+3. Add JWT validation middleware/dependencies to `apps/api`.
+4. Add Postgres and the user/org/membership/subscription tables.
+5. Sync Auth0 signup/login users into the local `users` table.
+6. Add role checks and subscription entitlement checks to backend endpoints.
+7. Add Stripe Checkout and webhooks to update local subscription state.
+8. Add an account/billing page and group admin page.
+9. Add audit logs before exposing paper order placement to real users.
+
+## Current Repo Integration
+
+Frontend:
+
+- `apps/web/src/main.jsx` wraps the app in `Auth0Provider` when `VITE_AUTH0_DOMAIN` and `VITE_AUTH0_CLIENT_ID` are configured.
+- `apps/web/src/App.jsx` shows signup, login, logout, billing, and subscription plan controls.
+- `apps/web/src/lib/api.js` sends an Auth0 bearer token to API calls when the user is signed in.
+
+Backend:
+
+- `/healthz` reports whether Auth0 and Stripe environment variables are configured.
+- `/api/plans` exposes the launch plan catalog and optional Stripe checkout URLs.
+- Existing guest quota remains active until backend JWT validation and subscription entitlements are added.
+
+Launch stance:
+
+- Keep guest screening available with a small quota.
+- Require Auth0 signup before users subscribe.
+- Use Stripe hosted Checkout or Payment Links for the first paid launch.
+- Treat Stripe webhooks and the local entitlement table as the source used for API permission checks.
+- Do not enable paper trading for real users until JWT validation, subscription checks, explicit consent, and audit logs are enforced.
 
 ## Environment Variables
 
@@ -99,6 +123,9 @@ AUTH0_ISSUER=https://your-tenant.us.auth0.com/
 AUTH0_ALGORITHMS=RS256
 STRIPE_SECRET_KEY=...
 STRIPE_WEBHOOK_SECRET=...
+STRIPE_LEVEL1_CHECKOUT_URL=...
+STRIPE_LEVEL2_CHECKOUT_URL=...
+STRIPE_BILLING_PORTAL_URL=...
 DATABASE_URL=...
 ```
 
@@ -109,4 +136,7 @@ VITE_AUTH0_DOMAIN=your-tenant.us.auth0.com
 VITE_AUTH0_CLIENT_ID=...
 VITE_AUTH0_AUDIENCE=https://api.be5g.com
 VITE_AUTH0_REDIRECT_URI=https://stocks.be5g.com
+VITE_STRIPE_LEVEL1_CHECKOUT_URL=...
+VITE_STRIPE_LEVEL2_CHECKOUT_URL=...
+VITE_STRIPE_BILLING_PORTAL_URL=...
 ```

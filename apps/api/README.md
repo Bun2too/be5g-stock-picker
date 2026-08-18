@@ -28,12 +28,19 @@ ALPACA_API_SECRET=...
 ALPACA_BASE_URL=https://paper-api.alpaca.markets/v2
 ALPACA_PAPER=true              # true = paper trading
 ALPACA_DATA_FEED=sip           # sip or iex (sip requires real-time entitlement/subscription)
+TW_STOCK_ENABLED=false         # enable only after adding a Taiwan market data adapter
+SYMBOL_STORE_BACKEND=json      # json or dynamodb
+AWS_REGION=us-east-1
+AWS_SYMBOLS_TABLE=
+AWS_PORTFOLIOS_TABLE=
 ALLOWED_ORIGINS=http://localhost:3000
 ```
 
 Notes:
 - `ALPACA_DATA_FEED=iex` works on the free/basic plan but can be incomplete for live decisioning.
 - `ALPACA_DATA_FEED=sip` is full consolidated feed and typically requires a subscription/entitlements.
+- `TW_STOCK_ENABLED=false` keeps Taiwan stock search, saved symbols, and screening disabled until the backend can fetch and score Taiwan market data.
+- `SYMBOL_STORE_BACKEND=dynamodb` makes `/api/symbols` and `/api/portfolio` use the AWS tables from `infra/aws`.
 - Local configuration lives in `apps/api/.env`. Production secrets should be set as Railway environment variables, not committed to the repo.
 - Auth0 and subscription planning is documented in [../../docs/auth0-subscriptions-plan.md](../../docs/auth0-subscriptions-plan.md).
 

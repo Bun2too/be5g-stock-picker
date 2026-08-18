@@ -9,9 +9,11 @@ import pandas as pd
 from .config import settings
 from .models import (
     MarketSnapshotRequest, ScreenRequest, ScreenResponse, CandidateOut,
-    ExplainRequest, ExplainResponse, PaperOrderRequest
+    ExplainRequest, ExplainResponse, PaperOrderRequest, SymbolSearchResponse,
+    PortfolioRequest, PortfolioResponse
 )
 from .universe import get_universe
+from .symbol_store import catalog_meta, get_portfolio, save_portfolio, search_symbols, symbols_for_screen
 from .alpaca_client import AlpacaAdapter
 from .scoring import score_snapshot, diversify_by_correlation
 from .explainer import explain
@@ -149,13 +151,111 @@ def healthz(request: Request, response: Response):
     return {
         "ok": True,
         "alpacaConfigured": settings.alpaca_configured,
+        "auth0Configured": settings.auth0_configured,
+        "stripeConfigured": settings.stripe_configured,
         "missingAlpacaFields": settings.missing_alpaca_fields,
         "mode": "paper" if settings.alpaca_paper else "live",
         "feed": settings.alpaca_data_feed,
         "alpacaBaseUrl": settings.alpaca_base_url,
         "paperTradingEnabled": settings.paper_trading_enabled,
+        "twStockEnabled": settings.tw_stock_enabled,
         "guestQuota": _quota_status(request, response),
     }
+
+@app.get("/api/plans")
+def plans():
+    level2_universes = ["mega_caps", "nasdaq100_like", "sp500_like", "us_most_traded", "mixed_portfolio"]
+    level2_features = [
+        "500 screens per day",
+        "All US universes plus advanced analytics",
+        "Advanced correlation & factor analytics",
+        "Unlimited portfolio exports",
+        "Custom alert workflows & priority support",
+    ]
+    if settings.tw_stock_enabled:
+        level2_universes.insert(4, "tw_popular")
+        level2_features[1] = "Full US + Taiwan market catalog"
+
+    return {
+        "plans": [
+            {
+                "id": "free",
+                "name": "Observer",
+                "price": "$0",
+                "period": "launch",
+                "highlight": False,
+                "limits": {
+                    "screensPerDay": settings.guest_screen_limit,
+                    "universes": ["mega_caps", "mixed_portfolio"],
+                    "savedScreens": 0,
+                },
+                "features": [
+                    "3 guest screens per day",
+                    "Mega-cap universe",
+                    "Multi-factor momentum & volatility scoring",
+                    "Custom portfolio symbol builder",
+                ],
+                "checkoutUrl": None,
+            },
+            {
+                "id": "level_1",
+                "name": "Catalyst",
+                "price": "$10",
+                "period": "month",
+                "highlight": True,
+                "limits": {
+                    "screensPerDay": 100,
+                    "universes": ["mega_caps", "nasdaq100_like", "sp500_like", "us_most_traded", "mixed_portfolio"],
+                    "savedScreens": 25,
+                },
+                "features": [
+                    "100 screens per day",
+                    "All US universes (S&P 500, Nasdaq-100, US 1000)",
+                    "Saved watchlists & portfolio tracking",
+                    "Email summary workflows",
+                    "Priority screening jobs",
+                ],
+                "checkoutUrl": settings.stripe_level1_checkout_url or "https://buy.stripe.com/dRm6oH2zxduG2Yc8Drds400",
+            },
+            {
+                "id": "level_2",
+                "name": "Alpha",
+                "price": "$29",
+                "period": "month",
+                "highlight": False,
+                "limits": {
+                    "screensPerDay": 500,
+                    "universes": level2_universes,
+                    "savedScreens": 100,
+                },
+                "features": level2_features,
+                "checkoutUrl": settings.stripe_level2_checkout_url or "https://buy.stripe.com/bJe9AT1vt62ebuI8Drds401",
+            },
+        ],
+        "billingPortalUrl": settings.stripe_billing_portal_url,
+    }
+
+@app.get("/api/symbols", response_model=SymbolSearchResponse, dependencies=[Security(verify_api_key)])
+def symbols(q: str = "", market: str = "", limit: int = 50):
+    markets = [part.strip().upper() for part in market.split(",") if part.strip()]
+    if not settings.tw_stock_enabled:
+        markets = [item for item in markets if item != "TW"] or ["US"]
+    return SymbolSearchResponse(
+        symbols=search_symbols(query=q, markets=markets, limit=limit),
+        meta=catalog_meta(),
+    )
+
+@app.get("/api/portfolio", response_model=PortfolioResponse, dependencies=[Security(verify_api_key)])
+def get_saved_portfolio(request: Request, response: Response):
+    owner_key = _quota_key(request, response)
+    return PortfolioResponse(**get_portfolio(owner_key))
+
+@app.put("/api/portfolio", response_model=PortfolioResponse, dependencies=[Security(verify_api_key)])
+def put_saved_portfolio(req: PortfolioRequest, request: Request, response: Response):
+    if not settings.tw_stock_enabled and _contains_tw_symbol(req.symbols):
+        raise HTTPException(status_code=400, detail="Taiwan stock symbols are currently disabled. Enable TW_STOCK_ENABLED only after a Taiwan market data adapter is configured.")
+    owner_key = _quota_key(request, response)
+    return PortfolioResponse(**save_portfolio(owner_key, req.symbols))
 
 def get_alpaca() -> AlpacaAdapter:
     if not settings.alpaca_configured:
@@ -168,6 +268,9 @@ def get_alpaca() -> AlpacaAdapter:
 def _cache_key(tickers: List[str], lookback: int, feed: str) -> str:
     t = ",".join(sorted(set([x.upper() for x in tickers])))
     return f"{feed}:{lookback}:{t}"
+
+def _contains_tw_symbol(symbols: List[str]) -> bool:
+    return any(symbol.strip().upper().endswith((".TW", ".TWO")) for symbol in symbols)
 
 @app.post("/api/market/snapshot", dependencies=[Security(verify_api_key)])
 def market_snapshot(req: MarketSnapshotRequest) -> Dict[str, Any]:
@@ -188,8 +291,28 @@ def market_snapshot(req: MarketSnapshotRequest) -> Dict[str, Any]:
 @app.post("/api/screen", response_model=ScreenResponse, dependencies=[Security(verify_api_key)])
 def screen(req: ScreenRequest, request: Request, response: Response):
     _enforce_guest_quota(request, response)
+    if not settings.tw_stock_enabled:
+        if req.universe == "tw_popular":
+            raise HTTPException(status_code=400, detail="Taiwan stock screening is currently disabled. Enable TW_STOCK_ENABLED only after a Taiwan market data adapter is configured.")
+        if _contains_tw_symbol(req.selectedSymbols):
+            raise HTTPException(status_code=400, detail="Taiwan stock symbols are currently disabled. Enable TW_STOCK_ENABLED only after a Taiwan market data adapter is configured.")
     alpaca = get_alpaca()
-    tickers = get_universe(req.universe)
+    symbol_meta = symbols_for_screen(req.universe, req.selectedSymbols)
+    if symbol_meta:
+        skipped = [item for item in symbol_meta if item.get("market") != "US"]
+        tickers = [item["providerSymbol"] for item in symbol_meta if item.get("market") == "US"]
+        meta_by_provider = {item["providerSymbol"].upper(): item for item in symbol_meta}
+    else:
+        skipped = []
+        tickers = get_universe(req.universe)
+        meta_by_provider = {}
+    notes: List[str] = []
+    if skipped:
+        notes.append(
+            f"Skipped {len(skipped)} Taiwan symbols because this deployment's live screener uses Alpaca US equities. Add a Taiwan market data adapter to score TWSE names."
+        )
+    if not tickers:
+        raise HTTPException(status_code=400, detail="No US-screenable tickers selected. Pick US symbols or configure a Taiwan data provider.")
     bars = alpaca.fetch_daily_bars(tickers, lookback_days=260)
     if bars.empty:
         raise HTTPException(status_code=502, detail="No market data returned. Check Alpaca credentials/feed/subscription.")
@@ -203,7 +326,6 @@ def screen(req: ScreenRequest, request: Request, response: Response):
         returns_by_ticker[t] = closes.pct_change()
 
     ranked = []
-    notes: List[str] = []
     for t, snap in snapshots.items():
         scored = score_snapshot(
             snap=snap,
@@ -226,7 +348,7 @@ def screen(req: ScreenRequest, request: Request, response: Response):
     for snap, sc in picked:
         out.append(CandidateOut(
             ticker=snap.ticker,
-            name=None,
+            name=meta_by_provider.get(snap.ticker.upper(), {}).get("name"),
             sector=None,
             price=snap.price,
             advUsd=snap.adv_usd,

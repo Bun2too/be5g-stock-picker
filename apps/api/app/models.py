@@ -4,7 +4,7 @@ from typing import List, Literal, Optional, Dict, Any
 InvestHorizon = Literal["daytrade","weekly","monthly","3m","1y","5y"]
 RiskProfile = Literal["low","medium","high"]
 Strategy = Literal["quality_value","momentum","low_vol","dividend","mean_reversion"]
-Universe = Literal["mega_caps","nasdaq100_like","sp500_like"]
+Universe = Literal["mega_caps","nasdaq100_like","sp500_like","us_most_traded","tw_popular","mixed_portfolio"]
 Diversification = Literal["balanced","concentrated"]
 
 class MarketSnapshotRequest(BaseModel):
@@ -36,6 +36,7 @@ class ScreenRequest(BaseModel):
     plannedVolumeUsd: float = Field(5000, ge=0)
     portfolioSize: int = Field(8, ge=1, le=30)
     diversification: Diversification = "balanced"
+    selectedSymbols: List[str] = []
 
 class ScreenResponse(BaseModel):
     settings: Dict[str, Any]
@@ -57,3 +58,24 @@ class PaperOrderRequest(BaseModel):
     type: Literal["market","limit"] = "market"
     limit_price: Optional[float] = None
     time_in_force: Literal["day","gtc"] = "day"
+
+class SymbolOut(BaseModel):
+    symbol: str
+    providerSymbol: str
+    market: Literal["US","TW"]
+    exchange: str
+    name: Optional[str] = None
+    rank: Optional[int] = None
+    popularityMetric: Optional[float] = None
+    source: Optional[str] = None
+
+class SymbolSearchResponse(BaseModel):
+    symbols: List[SymbolOut]
+    meta: Dict[str, Any]
+
+class PortfolioRequest(BaseModel):
+    symbols: List[str] = Field(default_factory=list, max_length=100)
+
+class PortfolioResponse(BaseModel):
+    symbols: List[str]
+    updatedAt: Optional[str] = None
