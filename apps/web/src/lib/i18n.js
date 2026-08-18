@@ -97,6 +97,7 @@ export const translations = {
         concentrated: "Concentrated (top scores)",
       },
       runSidebarCta: "▶  Run live screen",
+      emptyPortfolioError: "Select at least one portfolio symbol before running a saved portfolio screen.",
       disclaimer: "Research and quantitative calculation assistant. Not financial advice.",
     },
     results: {
@@ -298,6 +299,7 @@ export const translations = {
         concentrated: "高分強勢集中 (優先鎖定評分最高標的)",
       },
       runSidebarCta: "▶  立即執行量化篩選",
+      emptyPortfolioError: "執行自選投資組合篩選前，請至少選擇一個標的。",
       disclaimer: "本工具為量化研究與輔助分析模型，非任何形式之投資邀約或財務建議。",
     },
     results: {

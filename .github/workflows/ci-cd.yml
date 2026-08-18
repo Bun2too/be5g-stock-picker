@@ -185,9 +185,27 @@ jobs:
 
       - name: Deploy to Railway via CLI
         env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SECRET_RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          SECRET_RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
           RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
         run: |
-          npx @railway/cli up \
+          if [ -z "$RAILWAY_SERVICE_ID" ]; then
+            echo "::error::RAILWAY_SERVICE_ID is not set. Add it under GitHub repository secrets."
+            exit 1
+          fi
+
+          if [ -n "$SECRET_RAILWAY_TOKEN" ]; then
+            export RAILWAY_TOKEN="$SECRET_RAILWAY_TOKEN"
+            echo "Using project-scoped RAILWAY_TOKEN."
+          elif [ -n "$SECRET_RAILWAY_API_TOKEN" ]; then
+            export RAILWAY_API_TOKEN="$SECRET_RAILWAY_API_TOKEN"
+            echo "Using account/workspace-scoped RAILWAY_API_TOKEN."
+          else
+            echo "::error::No Railway token configured. Add RAILWAY_TOKEN from Railway project settings, or RAILWAY_API_TOKEN from Railway account/workspace tokens."
+            exit 1
+          fi
+
+          npx @railway/cli@5.41.2 whoami
+          npx @railway/cli@5.41.2 up \
             --service "$RAILWAY_SERVICE_ID" \
             --detach
