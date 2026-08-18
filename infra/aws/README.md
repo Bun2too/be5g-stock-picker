@@ -103,11 +103,18 @@ aws secretsmanager put-secret-value \
 
 Workflow: [../../.github/workflows/aws-infra.yml](../../.github/workflows/aws-infra.yml)
 
-Required GitHub secret:
+Required GitHub secret for normal OIDC deployment:
 
 | Secret | Purpose |
 |---|---|
 | `AWS_ROLE_TO_ASSUME` | IAM role ARN used by GitHub Actions OIDC |
+
+Bootstrap alternative when the OIDC role does not exist yet:
+
+| Secret | Purpose |
+|---|---|
+| `AWS_ACCESS_KEY_ID` | Temporary IAM access key allowed to run Terraform |
+| `AWS_SECRET_ACCESS_KEY` | Secret key for that temporary IAM access key |
 
 Optional GitHub secret:
 
@@ -115,7 +122,7 @@ Optional GitHub secret:
 |---|---|
 | `AWS_REGION` | `us-east-1` |
 
-Bootstrap note: the OIDC role can be created by Terraform, but the very first apply still needs AWS credentials locally or an existing deploy role. Once Terraform outputs `github_actions_role_arn`, save that ARN as `AWS_ROLE_TO_ASSUME`.
+Bootstrap note: the OIDC role can be created by Terraform, but the very first apply still needs AWS credentials locally, static bootstrap secrets in GitHub Actions, or an existing deploy role. Once Terraform outputs `github_actions_role_arn`, save that ARN as `AWS_ROLE_TO_ASSUME` and remove the static bootstrap keys from GitHub secrets.
 
 ## Railway API integration plan
 

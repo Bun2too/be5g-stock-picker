@@ -105,3 +105,26 @@ def test_tw_screening_is_rejected_while_feature_flag_is_disabled():
 
     assert response.status_code == 400
     assert "Taiwan stock screening is currently disabled" in response.json()["detail"]
+
+
+def test_empty_saved_portfolio_screening_is_rejected():
+    client = TestClient(app)
+    guest_usage_cache.clear()
+
+    response = client.post(
+        "/api/screen",
+        headers=auth_headers(),
+        json={
+            "horizon": "1y",
+            "risk": "medium",
+            "strategy": "momentum",
+            "universe": "mixed_portfolio",
+            "selectedSymbols": [],
+            "plannedVolumeUsd": 5000,
+            "portfolioSize": 8,
+            "diversification": "balanced",
+        },
+    )
+
+    assert response.status_code == 400
+    assert "requires at least one selected symbol" in response.json()["detail"]

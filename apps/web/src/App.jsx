@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth0 } from "@auth0/auth0-react";
 import {
   ApiError,
@@ -127,8 +127,10 @@ function ShieldIcon() {
 // ── Toast notification system ─────────────────────────────────────────────────
 function useToasts() {
   const [toasts, setToasts] = useState([]);
+  const toastSeq = useRef(0);
   const addToast = (message, type = "success") => {
-    const id = Date.now();
+    toastSeq.current += 1;
+    const id = `${Date.now()}-${toastSeq.current}`;
     setToasts((t) => [...t, { id, message, type }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
   };
@@ -401,10 +403,18 @@ function StockPickerApp({ auth }) {
     setNotes([]);
 
     try {
+      const screenSettings = {
+        ...settings,
+        selectedSymbols: [...(settings.selectedSymbols || [])],
+      };
+      if (screenSettings.universe === "mixed_portfolio" && screenSettings.selectedSymbols.length === 0) {
+        throw new Error(t.controls.emptyPortfolioError);
+      }
+
       const accessToken = auth?.isAuthenticated
         ? await auth.getAccessTokenSilently()
         : null;
-      const screen = await runScreen(settings, accessToken);
+      const screen = await runScreen(screenSettings, accessToken);
       setResults(screen.candidates || []);
       setNotes(screen.notes || []);
       setQuota(screen.settings?.guestQuota || quota);

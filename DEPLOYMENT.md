@@ -166,13 +166,21 @@ In your GitHub repository, navigate to **Settings → Secrets and variables → 
 |---|---|---|
 | `NETLIFY_AUTH_TOKEN` | Netlify Personal Access Token | Netlify User Settings → Personal access tokens |
 | `NETLIFY_SITE_ID` | Netlify Site API ID | Netlify Site → Site configuration → General |
-| `RAILWAY_TOKEN` | Railway API / Account Token | Railway → Account Settings → Tokens |
+| `RAILWAY_TOKEN` | Railway project token for the target project/environment | Railway project settings → Tokens |
+| `RAILWAY_API_TOKEN` *(Alternative)* | Railway account/workspace token if you do not use a project token | Railway account/workspace settings → Tokens |
 | `RAILWAY_SERVICE_ID` | Railway Service ID for `apps/api` | Railway project → Service Settings → Service ID |
 | `VITE_API_BASE_URL` | Live Backend API URL | `https://your-backend.railway.app` |
 | `VITE_API_KEY` | Backend internal access key | Same value as `API_KEY` in Railway |
 | `VITE_AUTH0_DOMAIN` *(Optional)* | Auth0 Domain | `dev-bun2too.us.auth0.com` |
 | `VITE_AUTH0_CLIENT_ID` *(Optional)* | Auth0 Client ID | Your Auth0 SPA Client ID |
 | `VITE_AUTH0_AUDIENCE` *(Optional)* | Auth0 Audience | `https://api.be5g.com` |
+
+Railway token notes:
+
+- Prefer `RAILWAY_TOKEN` as a project-scoped token for CI deployments.
+- Use `RAILWAY_API_TOKEN` only if you are using an account/workspace token.
+- Do not set both at the same time; the Railway CLI expects only one Railway auth token type.
+- If CI says `Invalid RAILWAY_TOKEN`, regenerate the token in Railway and replace the GitHub secret. The workflow validates auth with `railway whoami` before deploying.
 
 ---
 

@@ -26,6 +26,9 @@ concurrency:
 env:
   TF_IN_AUTOMATION: "true"
   AWS_REGION: ${{ secrets.AWS_REGION || 'us-east-1' }}
+  AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+  AWS_ACCESS_KEY_ID_SECRET: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_SECRET_ACCESS_KEY_SECRET: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
 jobs:
   terraform:
@@ -39,11 +42,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
 
-      - name: Configure AWS credentials
+      - name: Check AWS authentication configuration
+        run: |
+          if [ -n "$AWS_ROLE_TO_ASSUME" ]; then
+            echo "Using GitHub OIDC role: $AWS_ROLE_TO_ASSUME"
+          elif [ -n "$AWS_ACCESS_KEY_ID_SECRET" ] && [ -n "$AWS_SECRET_ACCESS_KEY_SECRET" ]; then
+            echo "Using static AWS credentials for bootstrap/deploy."
+          else
+            echo "::error::AWS credentials are not configured. Set AWS_ROLE_TO_ASSUME for OIDC, or set AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY for initial bootstrap."
+            exit 1
+          fi
+
+      - name: Configure AWS credentials via OIDC
+        if: env.AWS_ROLE_TO_ASSUME != ''
         uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-session-name: stock-picker-terraform
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Configure AWS credentials via static keys
+        if: env.AWS_ROLE_TO_ASSUME == '' && env.AWS_ACCESS_KEY_ID_SECRET != '' && env.AWS_SECRET_ACCESS_KEY_SECRET != ''
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-access-key-id: ${{ env.AWS_ACCESS_KEY_ID_SECRET }}
+          aws-secret-access-key: ${{ env.AWS_SECRET_ACCESS_KEY_SECRET }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS caller identity
+        run: aws sts get-caller-identity
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v4

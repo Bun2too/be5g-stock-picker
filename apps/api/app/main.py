@@ -291,6 +291,8 @@ def market_snapshot(req: MarketSnapshotRequest) -> Dict[str, Any]:
 @app.post("/api/screen", response_model=ScreenResponse, dependencies=[Security(verify_api_key)])
 def screen(req: ScreenRequest, request: Request, response: Response):
     _enforce_guest_quota(request, response)
+    if req.universe == "mixed_portfolio" and not req.selectedSymbols:
+        raise HTTPException(status_code=400, detail="Saved portfolio screening requires at least one selected symbol.")
     if not settings.tw_stock_enabled:
         if req.universe == "tw_popular":
             raise HTTPException(status_code=400, detail="Taiwan stock screening is currently disabled. Enable TW_STOCK_ENABLED only after a Taiwan market data adapter is configured.")
@@ -302,6 +304,8 @@ def screen(req: ScreenRequest, request: Request, response: Response):
         skipped = [item for item in symbol_meta if item.get("market") != "US"]
         tickers = [item["providerSymbol"] for item in symbol_meta if item.get("market") == "US"]
         meta_by_provider = {item["providerSymbol"].upper(): item for item in symbol_meta}
+    elif req.universe == "mixed_portfolio":
+        raise HTTPException(status_code=400, detail="No selected portfolio symbols matched the symbol catalog.")
     else:
         skipped = []
         tickers = get_universe(req.universe)
