@@ -59,7 +59,10 @@ jobs:
           GUEST_SESSION_COOKIE_SECURE: "false"
           GUEST_SESSION_COOKIE_SAMESITE: "lax"
         run: |
-          pytest --tb=short -q
+          echo "PWD=$PWD"
+          echo "PYTHONPATH=$PYTHONPATH"
+          python -c "import sys; print(sys.path[:5]); import app; print(app.__file__)"
+          PYTHONPATH="$PWD" python -m pytest --tb=short -q
 
   # ── 2. Frontend Testing ───────────────────────────────────────────────────────
   test-frontend:
