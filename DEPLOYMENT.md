@@ -164,8 +164,8 @@ In your GitHub repository, navigate to **Settings → Secrets and variables → 
 
 | Secret Name | Description | Example / Source |
 |---|---|---|
-| `NETLIFY_AUTH_TOKEN` | Netlify Personal Access Token | Netlify User Settings → Personal access tokens |
-| `NETLIFY_SITE_ID` | Netlify Site API ID | Netlify Site → Site configuration → General |
+| `NETLIFY_AUTH_TOKEN` | Netlify Personal Access Token with access to the target team/site | Netlify User Settings → Applications → Personal access tokens |
+| `NETLIFY_SITE_ID` | Netlify Project ID, formerly Site ID | Netlify Project configuration → General → Project details → Project information |
 | `RAILWAY_TOKEN` | Railway project token for the target project/environment | Railway project settings → Tokens |
 | `RAILWAY_API_TOKEN` *(Alternative)* | Railway account/workspace token if you do not use a project token | Railway account/workspace settings → Tokens |
 | `RAILWAY_SERVICE_ID` | Railway Service ID for `apps/api` | Railway project → Service Settings → Service ID |
@@ -180,7 +180,13 @@ Railway token notes:
 - Prefer `RAILWAY_TOKEN` as a project-scoped token for CI deployments.
 - Use `RAILWAY_API_TOKEN` only if you are using an account/workspace token.
 - Do not set both at the same time; the Railway CLI expects only one Railway auth token type.
-- If CI says `Invalid RAILWAY_TOKEN`, regenerate the token in Railway and replace the GitHub secret. The workflow validates auth with `railway whoami` before deploying.
+- If CI says `Invalid RAILWAY_TOKEN`, regenerate a project token for the same Railway project/environment as `RAILWAY_SERVICE_ID` and replace the GitHub secret.
+
+Netlify token notes:
+
+- `NETLIFY_SITE_ID` must be the Project ID, not the display name unless you intentionally deploy by name.
+- `NETLIFY_AUTH_TOKEN` must belong to a user/team that can access that Project ID.
+- If CI says `Failed retrieving site data ... Not Found`, either the Project ID is wrong or the token does not have access to that site/team.
 
 ---
 
