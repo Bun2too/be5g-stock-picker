@@ -200,10 +200,24 @@ jobs:
         env:
           SECRET_RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           SECRET_RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_API_TOKEN }}
+          RAILWAY_PROJECT_ID: ${{ secrets.RAILWAY_PROJECT_ID }}
+          RAILWAY_ENVIRONMENT_ID: ${{ secrets.RAILWAY_ENVIRONMENT_ID }}
+          RAILWAY_ENVIRONMENT_NAME: ${{ secrets.RAILWAY_ENVIRONMENT_NAME || 'production' }}
           RAILWAY_SERVICE_ID: ${{ secrets.RAILWAY_SERVICE_ID }}
         run: |
           if [ -z "$RAILWAY_SERVICE_ID" ]; then
             echo "::error::RAILWAY_SERVICE_ID is not set. Add it under GitHub repository secrets."
+            exit 1
+          fi
+
+          if [ -z "$RAILWAY_PROJECT_ID" ]; then
+            echo "::error::RAILWAY_PROJECT_ID is not set. Add the Railway Project ID under GitHub repository secrets."
+            exit 1
+          fi
+
+          railway_environment="${RAILWAY_ENVIRONMENT_ID:-$RAILWAY_ENVIRONMENT_NAME}"
+          if [ -z "$railway_environment" ]; then
+            echo "::error::RAILWAY_ENVIRONMENT_ID or RAILWAY_ENVIRONMENT_NAME is required."
             exit 1
           fi
 
@@ -224,6 +238,9 @@ jobs:
             npx @railway/cli@5.41.2 whoami
           fi
 
+          echo "Deploying Railway project=$RAILWAY_PROJECT_ID environment=$railway_environment service=$RAILWAY_SERVICE_ID"
           npx @railway/cli@5.41.2 up \
+            --project "$RAILWAY_PROJECT_ID" \
+            --environment "$railway_environment" \
             --service "$RAILWAY_SERVICE_ID" \
             --detach
