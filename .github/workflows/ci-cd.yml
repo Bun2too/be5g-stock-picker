@@ -183,9 +183,6 @@ jobs:
     needs: [test-backend, test-frontend]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/api
 
     steps:
       - name: Checkout repository
@@ -240,6 +237,8 @@ jobs:
 
           echo "Deploying Railway project=$RAILWAY_PROJECT_ID environment=$railway_environment service=$RAILWAY_SERVICE_ID"
           npx @railway/cli@5.41.2 up \
+            apps/api \
+            --path-as-root \
             --project "$RAILWAY_PROJECT_ID" \
             --environment "$railway_environment" \
             --service "$RAILWAY_SERVICE_ID" \

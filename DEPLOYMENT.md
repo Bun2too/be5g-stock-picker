@@ -151,12 +151,12 @@ This repository includes a production-ready GitHub Actions workflow in [`.github
 
 1. **Test**:
    - `apps/api`: Runs `pytest` in Python 3.12 with simulated credentials.
-   - `apps/web`: Runs `vitest` in Node 20.
+   - `apps/web`: Runs `vitest` in Node 24.
 2. **Build**:
    - `apps/web`: Executes `npm run build` with injected production variables and saves `dist/` as a pipeline artifact.
 3. **Deploy** (Triggered automatically on push to `main`):
    - **Frontend → Netlify**: Uses Netlify CLI to deploy `dist/` directly to your production site.
-   - **Backend → Railway**: Uses Railway CLI (`railway up`) to deploy the `apps/api` service.
+   - **Backend → Railway**: Uses Railway CLI (`railway up apps/api --path-as-root`) to deploy the `apps/api` service from its Dockerfile.
 
 ### Required GitHub Repository Secrets
 
@@ -185,6 +185,13 @@ Railway token notes:
 - Do not set both at the same time; the Railway CLI expects only one Railway auth token type.
 - If CI says `Invalid RAILWAY_TOKEN`, regenerate a project token for the same Railway project/environment as `RAILWAY_PROJECT_ID` and replace the GitHub secret.
 - If CI says `Service not found`, `RAILWAY_SERVICE_ID` is wrong or it does not belong to `RAILWAY_PROJECT_ID` + `RAILWAY_ENVIRONMENT_ID`/name.
+
+Railway Dockerfile notes:
+
+- The backend Dockerfile lives at `apps/api/Dockerfile`.
+- The GitHub Actions deploy command passes `apps/api --path-as-root` so Railway treats `apps/api` as the uploaded source root and sees `Dockerfile` there.
+- If you deploy from the Railway dashboard instead of this workflow, either set the service root directory to `apps/api` or configure the service's Dockerfile path as `apps/api/Dockerfile`.
+- In Railway build logs, look for `Using detected Dockerfile!` to confirm Railway is using Docker instead of automatic Railpack detection.
 
 Netlify token notes:
 
@@ -278,7 +285,17 @@ This repository is an isolated monorepo:
 - frontend in `apps/web`
 - backend in `apps/api`
 
-For Railway, create a dedicated backend service and set its root directory to `/apps/api`.
+For Railway, create a dedicated backend service for the FastAPI app. In GitHub Actions, the workflow deploys it with:
+
+```bash
+npx @railway/cli@5.41.2 up apps/api --path-as-root \
+  --project "$RAILWAY_PROJECT_ID" \
+  --environment "$RAILWAY_ENVIRONMENT_ID" \
+  --service "$RAILWAY_SERVICE_ID" \
+  --detach
+```
+
+That makes `apps/api` the source root for the uploaded archive, so Railway detects `apps/api/Dockerfile` as the root `Dockerfile`. If you use Railway dashboard autodeploys instead, set the service root directory to `apps/api`.
 
 For Netlify, point the site at `apps/web`.
 
