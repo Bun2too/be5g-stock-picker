@@ -115,6 +115,23 @@ jobs:
       - name: Install npm dependencies
         run: npm ci
 
+      - name: Validate frontend environment
+        env:
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
+        run: |
+          if [ -z "$VITE_API_BASE_URL" ]; then
+            echo "::error::VITE_API_BASE_URL is not set in GitHub repository secrets. This workflow builds the Vite bundle before uploading it to Netlify, so Netlify site environment variables are not used for this build."
+            exit 1
+          fi
+
+          case "$VITE_API_BASE_URL" in
+            http://*|https://*)
+              ;;
+            *)
+              echo "::warning::VITE_API_BASE_URL in GitHub repository secrets does not start with http:// or https://. The app will normalize bare hostnames to https:// at runtime, but the GitHub secret should still be corrected."
+              ;;
+          esac
+
       - name: Build production bundle
         env:
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}

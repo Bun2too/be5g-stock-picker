@@ -178,6 +178,13 @@ In your GitHub repository, navigate to **Settings → Secrets and variables → 
 | `VITE_AUTH0_CLIENT_ID` *(Optional)* | Auth0 Client ID | Your Auth0 SPA Client ID |
 | `VITE_AUTH0_AUDIENCE` *(Optional)* | Auth0 Audience | `https://api.be5g.com` |
 
+Frontend environment notes:
+
+- This repository's GitHub Actions workflow runs `npm run build` first, then uploads the already-built `dist/` folder to Netlify.
+- Because of that, Vite variables such as `VITE_API_BASE_URL` must be configured in **GitHub repository secrets**, not only in Netlify.
+- Netlify site environment variables are used when Netlify runs the build itself. They do not rewrite values that were already baked into a deployed Vite JavaScript bundle.
+- `VITE_API_BASE_URL` should include the scheme, for example `https://be5g-sp-api-production.up.railway.app`.
+
 Railway token notes:
 
 - Prefer `RAILWAY_TOKEN` as a project-scoped token for CI deployments.

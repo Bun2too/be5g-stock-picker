@@ -1,13 +1,25 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
-if (!API_BASE_URL) {
-  throw new Error(
-    "VITE_API_BASE_URL is not set. " +
-    "For local dev, add it to apps/web/.env. " +
-    "For Netlify, set it under Site → Environment variables."
-  );
+export function normalizeApiBaseUrl(value) {
+  const trimmed = String(value || "").trim();
+  if (!trimmed) return "";
+  if (/^https?:\/\//i.test(trimmed) || trimmed.startsWith("/")) {
+    return trimmed.replace(/\/+$/, "");
+  }
+  return `https://${trimmed.replace(/\/+$/, "")}`;
 }
 
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
 const API_KEY = import.meta.env.VITE_API_KEY || "";
+
+function getApiBaseUrl() {
+  if (!API_BASE_URL) {
+    throw new Error(
+      "VITE_API_BASE_URL is not set. " +
+      "For local dev, add it to apps/web/.env. " +
+      "For Netlify, set it under Site → Environment variables."
+    );
+  }
+  return API_BASE_URL;
+}
 
 export class ApiError extends Error {
   constructor(message, status, detail) {
@@ -20,7 +32,7 @@ export class ApiError extends Error {
 
 async function request(path, options = {}) {
   const { accessToken, ...fetchOptions } = options;
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
